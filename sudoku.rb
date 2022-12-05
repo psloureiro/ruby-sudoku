@@ -11,17 +11,16 @@
 ##   grid is a grid,e.g. 81 non-blank chars, e.g. starting with '.18...7...
 ##   values is a hash of possible values, e.g. {'A1':'12349', 'A2':'8', ...}
 
-def cross(a, b)
-  puts "cross(#{a},#{b})" if @DEBUG
+def cross(par1, par2)
   result = []
-  
-  a.each_char do |a|
-    b.each_char do |b|
-      result << a+b
+
+  par1.each_char do |a|
+    par2.each_char do |b|
+      result << a + b
     end
   end
 
-  return result
+  result
 end
 
 @DEBUG   = false
@@ -35,9 +34,9 @@ unitlist = []
 @cols.each_char { |c| unitlist << cross(@rows, c) }
 @rows.each_char { |r| unitlist << cross(r, @cols) }
 
-['ABC','DEF','GHI'].each do |rs|
-  ['123','456','789'].each do |cs|
-     unitlist << cross(rs, cs)
+%w[ABC DEF GHI].each do |rs|
+  %w[123 456 789].each do |cs|
+    unitlist << cross(rs, cs)
   end
 end
 
@@ -45,9 +44,9 @@ end
 
 @squares.each do |s|
   arr_units = []
-  
+
   unitlist.each do |u|
-    arr_units << u if u.include?(s) 
+    arr_units << u if u.include?(s)
   end
 
   @units[s] = arr_units
@@ -57,7 +56,7 @@ end
 
 @squares.each do |s|
   peers = []
-  
+
   @units[s].each do |u|
     peers << u - [s]
   end
@@ -78,30 +77,28 @@ def parse_grid(grid)
     values[s] = @digits.dup
   end
 
-  puts "parse_grid -> values = #{values}" if @DEBUG
-  
   grid_values = grid_hash(grid)
-  
-  return false if !grid_values
 
-  grid_hash(grid).each do |s,d|
-    if (@digits.include?(d)) && (! assign(values, s, d))
-      return false
-    end
+  return false unless grid_values
+
+  grid_hash(grid).each do |s, d|
+    return false if @digits.include?(d) && !assign(values, s, d)
   end
 
-  return values
+  puts "DEBUG: parse_grid -> result values = #{values}" if @DEBUG
+
+  values
 end
 
 def grid_hash(grid)
   # Convert grid into a hash of (square: char) with '0' or '.' for empties
 
-  chars = ""
-  chars_invalid = ""
+  chars = ''
+  chars_invalid = ''
 
   grid.each_char do |c|
     if @digits.include?(c) || '0.'.include?(c)
-      chars += c.gsub('0','.')
+      chars += c.gsub('0', '.')
       chars_invalid += ' '
     else
       chars_invalid += '^'
@@ -124,67 +121,67 @@ def grid_hash(grid)
 
   @grid_original = result.clone
 
-  return result
+  result
 end
 
 ################ Constraint Propagation ################
 
-def assign(values, s, d)
+def assign(values, square, dig)
   # Eliminates all the other values (except d) from values[s] and propagate
   # Return values, except return false if a contradiction is detected
 
-  other_values = values[s].gsub(d, '')
+  other_values = values[square].gsub(dig, '')
 
-  other_values.each_char do |d2|
-    return false if (! eliminate(values, s, d2))
+  other_values.each_char do |dig2|
+    return false unless eliminate(values, square, dig2)
   end
 
-  return values
-end  
+  values
+end
 
-def eliminate(values, s, d)
+def eliminate(values, square, dig)
   # Eliminate d from values[s]; propagate when values or places <= 2.
   # Return values, except return False if a contradiction is detected."""
 
-  return values if (! values[s].include?(d))
+  return values unless values[square].include?(dig)
 
-  values[s] = values[s].gsub(d, '')
+  values[square] = values[square].gsub(dig, '')
 
   ## (1) If a square s is reduced to one value d2, then eliminate d2 from the peers.
 
-  return false if values[s].length == 0   ## Contradiction: removed last value
+  return false if values[square].length.zero? ## Contradiction: removed last value
 
-  if values[s].length == 1
-    d2 = values[s]
+  if values[square].length == 1
+    dig2 = values[square]
 
-    @peers[s].each do |s2|
-      return false if (! eliminate(values, s2, d2))
+    @peers[square].each do |peer|
+      return false unless eliminate(values, peer, dig2)
     end
   end
 
   ## (2) If a unit u is reduced to only one place for a value d, then put it there.
 
-  @units[s].each do |u|
+  @units[square].each do |unit|
     dplaces = []
-    
-    u.each do |s3|
-      dplaces << s3 if values[s3].include?(d)
+
+    unit.each do |square3|
+      dplaces << square3 if values[square3].include?(dig)
     end
 
-    return false if dplaces.length == 0
-    return false if (dplaces.length == 1) && (! assign(values, dplaces[0], d))
+    return false if dplaces.empty?
+    return false if dplaces.length == 1 && !assign(values, dplaces[0], dig)
   end
 
-  return values
+  values
 end
 
 ################ Search algorithm #############
 
 def search(values)
-  return false if !values
+  return false unless values
 
   is_solved = true
-  
+
   @squares.each do |s|
     if values[s].length > 1
       is_solved = false
@@ -193,25 +190,21 @@ def search(values)
   end
 
   if is_solved
-    puts("Solved - Attempts = #{@attempts}") if @DEBUG
+    puts("DEBUG: Solved - # Attempts = #{@attempts}") if @DEBUG
     return values
   end
 
-  if (@attempts % 10000 == 0)
-    display(values) if @DEBUG
-  end 
+  display(values) if (@attempts % 10_000).zero? && @DEBUG
 
   @attempts += 1
 
   squares_aux = []
 
   @squares.each do |s|
-    if values[s].length > 1
-      squares_aux << [values[s].length, s]
-    end
+    squares_aux << [values[s].length, s] if values[s].length > 1
   end
 
-  n, s = squares_aux.min
+  _n, s = squares_aux.min
 
   values[s].each_char do |d|
     result = search(assign(values.clone, s, d))
@@ -219,118 +212,112 @@ def search(values)
     return result if result
   end
 
-  return false
+  false
 end
 
 ################ Display as 2-D grid ################
 
-def display(values, index=1, exec_time=0.0)
+def display(values, index = 1, exec_time = 0.0)
   # Display these values as a 2-D grid."
 
-  return false if !values
-  
-  exec_time_fmt = "%.2f" % exec_time
+  return false unless values
 
-  puts "==================================================="
+  exec_time_fmt = format('%.2f', exec_time)
+
+  puts '==================================================='
   puts "Problem #{index} - Attempts to solve = #{@attempts}"
   puts "  Execution time = #{exec_time_fmt} seconds" if exec_time > 0.0
-  puts "==================================================="
+  puts '==================================================='
 
   @rows.each_char do |r|
-    line_original = ""
-    line_solution = ""
-    @cols.each_char do |c|
-      line_original += @grid_original[r+c] + " "
-      line_solution += values[r+c] + " "
+    line_original = ''
+    line_solution = ''
 
-      if "36".include?(c)
-        line_original += "| "
-        line_solution += "| "
+    @cols.each_char do |c|
+      line_original += "#{@grid_original[r + c]} "
+      line_solution += "#{values[r + c]} "
+
+      if '36'.include?(c)
+        line_original += '| '
+        line_solution += '| '
       end
     end
 
-    if r == 'E'
-      filler = "  -->   "
-    else
-      filler = "        "
-    end
+    filler = if r == 'E'
+               '  -->   '
+             else
+               '        '
+             end
 
     puts "#{line_original}#{filler}#{line_solution}"
 
-    if "CF".include?(r)
-      puts "------+-------+------         ------+-------+------"
-    end
+    puts '------+-------+------         ------+-------+------' if 'CF'.include?(r)
   end
 
-  return true
+  true
 end
 
 ################ Generate a random grid ################
 
-def random_grid(n=17)
+def random_grid(n = 17)
   #  Make a random puzzle with N or more assignments. Restart on contradictions.
   #  Note the resulting puzzle is not guaranteed to be solvable, but empirically
   #  about 99.8% of them are solvable. Some have multiple solutions.
   values = {}
 
-  @squares.each do |s|
-    values[s] = @digits.dup
+  @squares.each do |square|
+    values[square] = @digits.dup
   end
-	
-  @squares.shuffle.each do |s|
-    if !assign(values, s, (values[s].split("").shuffle.sample))
-      break
-	  end
-    
+
+  @squares.shuffle.each do |square|
+    break unless assign(values, square, values[square].split('').shuffle.sample)
+
     ds = []
-    
-    @squares.each do |s|
-      ds << values[s] if values[s].length == 1
+
+    @squares.each do |square2|
+      ds << values[square2] if values[square2].length == 1
     end
 
-    if (ds.length >= n) && (ds.uniq().length >= 8)
-      result = ""
-      
-      @squares.each do |s|
-        if values[s].length == 1
-          result += values[s]
-        else
-          result += "."
-        end
-      end
-      
-      return result
+    next unless (ds.length >= n) && (ds.uniq.length >= 8)
+
+    result = ''
+
+    @squares.each do |square3|
+      result += if values[square3].length == 1
+                  values[square3]
+                else
+                  '.'
+                end
     end
+
+    return result
   end
-	
-  return random_grid(n)
+
+  random_grid(n)
 end
 
 ################ Read initial grids from a file ################
 
-def from_file(filename, sep=$/)
+def from_file(filename, sep = $INPUT_RECORD_SEPARATOR)
   # Parse the contents of a file into a list of strings, separated by sep.
   puts "Reading initial grids from file '#{filename}'"
-  
-  result = File.open(filename).read.strip.split(separator=sep)
-  
+
+  result = File.open(filename).read.strip.split(sep)
+
   puts "#{result.length} initial grids read"
-  puts ""
-  
-  return result
+  puts ''
+
+  result
 end
 
 ################ Solve a sequence of sudokus ################
 
 def solver(grids)
   # If the parameter is a String, convert it to Array to use the main code to solve problem
-  if grids.is_a? String
-	  grids = Array(grids)
-  end
+  grids = Array(grids) if grids.is_a? String
 
   grids.each_with_index do |grid, index|
-    exec_time = 0.0
-	  @attempts = 1
+    @attempts = 1
 
     starting = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
@@ -338,28 +325,7 @@ def solver(grids)
 
     ending = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     exec_time = ending - starting
-  
-    display(result, index+1, exec_time)
+
+    display(result, index + 1, exec_time)
   end
 end
-
-################ Tests #############
-
-grid1 = '5..A1...9472.956.39..76.8.586..37152....B49.6.5.6.1784.31246..8.48.59367.9.378.21'
-grid2 = '4.....8.5.3..........7......2.....6.....8.4......1.......6.3.7.5..2.....1.4......'
-grid3 = '..8.6.3.164371892515.....8..26.815.7..54.......9.............1..6......3.3..7.4..'
-grid4 = '480016300002008000005900000000500200000407039060000000730000000000700040000020065'
-hard1 = '.....6....59.....82....8....45........3........6..3.54...325..6..................'
-
-#solver(grid1)
-#solver(grid2)
-solver(grid3)
-#solver(grid4)
-#solver(hard1)
-
-#solver(from_file('easy50.txt'))
-#solver(from_file('top95.txt'))
-#solver(from_file('hardest.txt'))
-#solver(from_file('top50000.txt'))
-
-#solver(random_grid())
